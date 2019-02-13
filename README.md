@@ -1,2 +1,2 @@
 # SqlFunctions
-Random SQL Server functions that were created as needed.
+Random SQL Server functions, procedures and scripts that were useful at one time may be again.
