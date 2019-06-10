@@ -1,17 +1,14 @@
--- =============================================
--- Author:		Paul G Brown
--- Copyright:   @ 2019 Paul G Brown
--- License:     See Github repo license
--- Create date: 2019-01-16
--- Description:	Gets the 9's completement of a
---              string.
--- =============================================
-CREATE FUNCTION GetNinesComplement
+CREATE FUNCTION dbo.GetNinesComplement
 (
 	@Source varchar(20)
 )
 RETURNS VARCHAR(20)
 AS
+/*
+
+Gets the 9's completement of a string.
+
+*/
 BEGIN
 	-- Declare the return variable here
 	DECLARE @Position int = 1

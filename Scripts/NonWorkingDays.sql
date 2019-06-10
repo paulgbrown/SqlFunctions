@@ -5,24 +5,26 @@ Creates a table of non-working days. This can then be subtracted from the number
 in a date range to determine the number of working days in the range.
 */
 CREATE TABLE NonWorkingDays (
-    NonWorkingDay date NOT NULL PRIMARY KEY,
-    IsHoliday bit NOT NULL,
-    IsWeekend bit NOT NULL,
-    DayOfWeek char(9) NOT NULL, 
-    Reason varchar(50) NOT NULL
+    NonWorkingDay DATE NOT NULL PRIMARY KEY,
+    IsHoliday BIT NOT NULL,
+    IsWeekend BIT NOT NULL,
+    DayOfWeek CHAR(9) NOT NULL, 
+    Reason VARCHAR(50) NOT NULL
     )
 
 -- Set the range of years and if the Friday after Thansgiving should be included 
-DECLARE @StartingYear int = 2010
-    , @CutoffYear int = 2030
-    , @IncludeFridayAfterThanksgiving bit = 1
-    , @IncludeIllinoisElectionDay bit = 1
-    , @IncludeLincolnsBirthday bit = 1
-    , @Year int
-    , @Dt Date
-    , @Cnt int
+DECLARE @StartingDate DATE = '01/01/2010'
+    , @CutoffDate DATE = '12/31/2030'
+    , @IncludeFridayAfterThanksgiving BIT = 1
+    , @IncludeIllinoisElectionDay BIT = 1
+    , @IncludeLincolnsBirthday BIT = 1
+    , @Year INT
+	, @CutoffYear INT
+    , @Dt DATE
+    , @Cnt INT
 
-SET @Year = @StartingYear
+SET @Year = DATEPART(YEAR, @StartingDate)
+SET @CutoffYear = DATEPART(YEAR, @CutoffDate)
 
 -- Work thru the years
 WHILE @Year < @CutoffYear
@@ -48,60 +50,34 @@ WHILE @Year < @CutoffYear
         IF @IncludeIllinoisElectionDay = 1 And @Year % 2 = 0
             BEGIN
                 SET @Dt = CAST('11/2/' + CAST(@Year as varchar) as date)
-                WHILE DATENAME(WEEKDAY, @Dt) <> 'TUESDAY'
-                    BEGIN
-                        SET @Dt = DATEADD(Day, 1, @Dt)
-                    END
+                SET @Dt = dbo.GetNextDayOfWeek('11/02/' + CAST(@Year as varchar), 'THURSDAY')
+            
                 INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'General Election Day'
             END
             
         BEGIN -- All of the holidays that fall on a specific day of the week
             -- Martin Luther King
-            SET @Dt = CAST('1/15/' + CAST(@Year as varchar) as date)
-            WHILE DATENAME(WEEKDAY, @Dt) <> 'MONDAY'
-                BEGIN
-                    SET @Dt = DATEADD(Day, 1, @Dt)
-                END
+            SET @Dt = dbo.GetNextDayOfWeek('01/15/' + CAST(@Year as varchar), 'MONDAY')
             INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'Martin Luther King Day'
 
             -- President's day
-            SET @Dt = CAST('2/15/' + CAST(@Year as varchar) as date)
-            WHILE DATENAME(WEEKDAY, @Dt) <> 'MONDAY'
-                BEGIN
-                    SET @Dt = DATEADD(Day, 1, @Dt)
-                END
+            SET @Dt = dbo.GetNextDayOfWeek('02/15/' + CAST(@Year as varchar), 'MONDAY')
             INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'President''s Day'
 
             -- Memorial day
-            SET @Dt = CAST('5/31/' + CAST(@Year as varchar) as date)
-            WHILE DATENAME(WEEKDAY, @Dt) <> 'MONDAY'
-                BEGIN
-                    SET @Dt = DATEADD(Day, -1, @Dt)
-                END
+            SET @Dt = dbo.GetPreviousDayOfWeek('05/31/' + CAST(@Year as varchar), 'MONDAY')
             INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'Memorial Day'
 
             -- Labor day
-            SET @Dt = CAST('9/1/' + CAST(@Year as varchar) as date)
-            WHILE DATENAME(WEEKDAY, @Dt) <> 'MONDAY'
-                BEGIN
-                    SET @Dt = DATEADD(Day, 1, @Dt)
-                END
+            SET @Dt = dbo.GetNextDayOfWeek('09/01/' + CAST(@Year as varchar), 'MONDAY')
             INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'Labor Day'
 
             -- Columbus day
-            SET @Dt = CAST('10/8/' + CAST(@Year as varchar) as date)
-            WHILE DATENAME(WEEKDAY, @Dt) <> 'MONDAY'
-                BEGIN
-                    SET @Dt = DATEADD(Day, 1, @Dt)
-                END
+            SET @Dt = dbo.GetNextDayOfWeek('10/08/' + CAST(@Year as varchar), 'MONDAY')
             INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'Columbus Day'
 
             BEGIN -- Thanksgiving day
-                SET @Dt = CAST('11/22/' + CAST(@Year as varchar) as date)
-                WHILE DATENAME(WEEKDAY, @Dt) <> 'THURSDAY'
-                    BEGIN
-                        SET @Dt = DATEADD(Day, 1, @Dt)
-                    END
+                SET @Dt = dbo.GetNextDayOfWeek('11/22/' + CAST(@Year as varchar), 'THURSDAY')
                 INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 1, 0, @Dt, DATENAME(WEEKDAY, @Dt), 'Thanksgiving Day'
 
                 IF @IncludeFridayAfterThanksgiving = 1
@@ -137,30 +113,33 @@ INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reas
 /* Weekends are done last so that a holiday is always recorded. They will still show as weekend day */
 BEGIN -- Weekends
     /* Find the first Saturday in the first year */
-    SET @Dt = CAST('1/1/' + CAST(@StartingYear as varchar) as date)
-    WHILE DATENAME(WEEKDAY, @Dt) <> 'SATURDAY'
-        BEGIN
-            SELECT @Cnt = COUNT(*) FROM NonWorkingDays WHERE NonWorkingDay = @Dt
-            IF DATENAME(WEEKDAY, @Dt) = 'SUNDAY' And @Cnt = 0
-                INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 0, 1, @Dt, DATENAME(WEEKDAY, @Dt), 'Weekend'
 
-            SET @Dt = DATEADD(Day, 1, @Dt)
-        END
+	DECLARE @Nums TABLE (Num INT)
+	DECLARE @Saturdays TABLE (ActualDate DATE)
 
-    /* Now loop thru each weekend until we get to the cutoff year */
-    WHILE YEAR(@Dt) < @CutoffYear
-        BEGIN
-            SELECT @Cnt = COUNT(*) FROM NonWorkingDays WHERE NonWorkingDay = @Dt
-            IF @Cnt = 0
-                INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 0, 1, @Dt, DATENAME(WEEKDAY, @Dt), 'Weekend'
-            SET @Dt = DATEADD(Day, 1, @Dt)
-            SELECT @Cnt = COUNT(*) FROM NonWorkingDays WHERE NonWorkingDay = @Dt
-            IF @Cnt = 0
-                INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason) SELECT 0, 1, @Dt, DATENAME(WEEKDAY, @Dt), 'Weekend'
-            SET @Dt = DATEADD(Day, 6, @Dt)
-        END
+    SET @Dt = dbo.GetNextDayOfWeek(@StartingDate, 'Saturday')
 
+	;WITH v AS (SELECT * FROM (VALUES(0),(0),(0),(0),(0),(0),(0),(0),(0),(0)) v(z))
+	INSERT INTO @Nums
+		SELECT TOP 2000 N FROM (SELECT ROW_NUMBER() OVER (ORDER BY v1.z)-1 N FROM v v1 
+			CROSS JOIN v v2 CROSS JOIN v v3 CROSS JOIN v v4 CROSS JOIN v v5 CROSS JOIN v v6) Nums
+
+	INSERT INTO @Saturdays
+		SELECT DATEADD(DAY, (7 * Num), @Dt) FROM @Nums
+
+	INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason)
+		SELECT 0, 1, ActualDate, 'Saturday', 'Weekend'
+		FROM @Saturdays
+		WHERE ActualDate NOT IN (SELECT NonWorkingDay FROM NonWorkingDays) 
+
+	INSERT INTO NonWorkingDays (IsHoliday, IsWeekend, NonWorkingDay, DayOfWeek, Reason)
+		SELECT 0, 1, DATEADD(DAY, 1, ActualDate), 'Sunday', 'Weekend'
+		FROM @Saturdays
+		WHERE ActualDate NOT IN (SELECT NonWorkingDay FROM NonWorkingDays)     
+    
     UPDATE NonWorkingDays SET IsWeekend = 1 WHERE DayOfWeek IN ('Saturday', 'Sunday')
 END
-SELECT NonWorkingDay, DayOfWeek, Reason, IsHoliday, IsWeekend FROM NonWorkingDays ORDER BY NonWorkingDay
 
+DELETE FROM NonWorkingDays WHERE NonWorkingDay < @StartingDate Or NonWorkingDay > @CutoffDate
+
+SELECT NonWorkingDay, DayOfWeek, Reason, IsHoliday, IsWeekend FROM NonWorkingDays ORDER BY NonWorkingDay
